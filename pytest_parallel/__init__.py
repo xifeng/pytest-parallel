@@ -59,15 +59,21 @@ def process_with_threads(queue, session, tests_per_worker, errors):
         thread = ThreadWorker(queue, session, errors)
         thread.start()
         threads.append(thread)
+
+    thread = ThreadWorker(queue, session, errors, run_unsafe=True)
+    thread.start()
+    threads.append(thread)
+
     [t.join() for t in threads]
 
 
 class ThreadWorker(threading.Thread):
-    def __init__(self, queue, session, errors):
+    def __init__(self, queue, session, errors, run_unsafe=False):
         threading.Thread.__init__(self)
         self.queue = queue
         self.session = session
         self.errors = errors
+        self.run_unsafe = run_unsafe
 
     def run(self):
         from tblib import pickling_support
@@ -83,7 +89,9 @@ class ThreadWorker(threading.Thread):
                 continue
             item = self.session.items[index]
             try:
-                run_test(self.session, item, None)
+                unsafe = item.get_closest_marker(name='unsafe') is not None
+                if not (self.run_unsafe ^ unsafe):
+                    run_test(self.session, item, None)
             except BaseException:
                 import pickle
                 import sys
