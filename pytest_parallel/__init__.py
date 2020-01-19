@@ -8,6 +8,7 @@ import threading
 import queue as Queue
 from py._xmlgen import raw
 from multiprocessing import Manager, Process
+from allure_pytest.plugin import pytest_configure as original_pytest_configure
 
 __version__ = '0.0.10'
 
@@ -54,6 +55,7 @@ def run_test(session, item, nextitem):
 
 
 def process_with_threads(queue, session, tests_per_worker, errors):
+    original_pytest_configure(allure_conf)
     threads = []
     for _ in range(tests_per_worker):
         thread = ThreadWorker(queue, session, errors)
@@ -67,6 +69,8 @@ def process_with_threads(queue, session, tests_per_worker, errors):
     [t.join() for t in threads]
 
 
+allure_conf = None
+
 class ThreadWorker(threading.Thread):
     def __init__(self, queue, session, errors, run_unsafe=False):
         threading.Thread.__init__(self)
@@ -79,6 +83,7 @@ class ThreadWorker(threading.Thread):
         from tblib import pickling_support
 
         pickling_support.install()
+        original_pytest_configure(allure_conf)
         while True:
             try:
                 index = self.queue.get_nowait()
@@ -106,6 +111,8 @@ class ThreadWorker(threading.Thread):
 
 @pytest.mark.trylast
 def pytest_configure(config):
+    global allure_conf
+    allure_conf = config
     workers = parse_config(config, 'workers')
     tests_per_worker = parse_config(config, 'tests_per_worker')
     if not config.option.collectonly and (workers or tests_per_worker):
